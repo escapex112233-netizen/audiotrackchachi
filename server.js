@@ -1,33 +1,25 @@
-const express = require('express');
-const http = require('http');
-const WebSocket = require('ws');
+const dgram = require('dgram');
+const server = dgram.createSocket('udp4');
 
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const clients = new Set();
 
-wss.on('connection', function(ws) {
-    console.log("⚡ New Device Connected");
+server.on('message', (msg, rinfo) => {
+    // Naya client register karo
+    const clientKey = `${rinfo.address}:${rinfo.port}`;
+    clients.add(clientKey);
 
-    ws.on('message', function(message) {
-        // Ek device se data lekar baki sabko broadcast karna
-        wss.clients.forEach(function(client) {
-            if (client !== ws && client.readyState === WebSocket.OPEN) {
-                client.send(message);
-            }
-        });
-    });
-
-    ws.on('close', function() {
-        console.log("❌ Device Disconnected");
-    });
+    // Message ko baaki sabko bhej do
+    for (const client of clients) {
+        const [addr, port] = client.split(':');
+        if (client !== clientKey) {
+            server.send(msg, port, addr);
+        }
+    }
 });
 
-app.get('/', function(req, res) {
-    res.send("ULTRA HIGH DEFINITION RELAY ACTIVE");
+server.on('listening', () => {
+    const address = server.address();
+    console.log(`UDP Server listening on ${address.address}:${address.port}`);
 });
 
-const PORT = process.env.PORT || 8080;
-server.listen(PORT, '0.0.0.0', function() {
-    console.log("🚀 Server running on port " + PORT);
-});
+server.bind(process.env.PORT || 8080);
